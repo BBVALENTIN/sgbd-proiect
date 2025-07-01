@@ -1,0 +1,184 @@
+-- INTEROGĂRI DIN index.php --
+
+-- Filtrare companii după oraș (folosind LIKE)
+SELECT c.*, a.oras
+FROM companii c
+JOIN adrese a ON c.id_adresa = a.id_adresa
+WHERE a.oras LIKE ?;
+
+-- Toate companiile cu adresele
+SELECT c.*, a.oras
+FROM companii c
+JOIN adrese a ON c.id_adresa = a.id_adresa;
+
+-- Toți utilizatorii site-ului (companii și aplicanți)
+(SELECT nume, email FROM companii)
+UNION
+(SELECT nume, email FROM aplicanti);
+
+-- Joburi fără aplicații
+SELECT j.titlu, c.nume AS companie
+FROM joburi j
+JOIN companii c ON j.id_companie = c.id_companie
+WHERE j.id_job NOT IN (
+    SELECT id_job FROM aplicari
+);
+
+-- Companii mai vechi de 10 ani
+SELECT nume, email, vechime
+FROM companii
+WHERE vechime > 10;
+
+-- Salariul oferit pe job
+SELECT j.titlu, c.nume AS companie, co.salariu
+FROM contracte co
+JOIN joburi j ON co.id_job = j.id_job
+JOIN companii c ON j.id_companie = c.id_companie;
+
+-- Joburi + Companii
+SELECT j.titlu, c.nume AS companie, j.locuri_valabile
+FROM joburi j
+JOIN companii c ON j.id_companie = c.id_companie;
+
+-- Joburi peste 5000 RON din Cluj-Napoca
+SELECT 
+    ap.nume AS NumeAplicant,
+    ap.prenume AS PrenumeAplicant,
+    ap.email AS EmailAplicant,
+    job_salariu_mare.titlu AS JobAplicat,
+    c.nume AS CompanieJob,
+    adr.oras AS OrasCompanie
+FROM
+    (
+        SELECT
+            j.id_job,
+            j.titlu,
+            j.id_companie
+        FROM
+            joburi j
+        JOIN
+            contracte co ON j.id_job = co.id_job
+        WHERE
+            co.salariu > 4000
+    ) AS job_salariu_mare
+JOIN
+    aplicari apl ON job_salariu_mare.id_job = apl.id_job
+JOIN
+    aplicanti ap ON apl.id_aplicant = ap.id_aplicant
+JOIN
+    companii c ON job_salariu_mare.id_companie = c.id_companie
+JOIN
+    adrese adr ON c.id_adresa = adr.id_adresa
+WHERE
+    adr.oras = 'Cluj-Napoca';
+
+-- Joburi cu aplicații și companii vechi de peste 5 ani
+SELECT
+    job_cu_aplicatii.titlu AS TitluJob,
+    c.nume AS NumeCompanie,
+    c.vechime AS VechimeCompanie
+FROM
+    (
+        SELECT
+            j.id_job,
+            j.titlu,
+            j.id_companie
+        FROM
+            joburi j
+        WHERE
+            j.id_job IN (SELECT id_job FROM aplicari)
+    ) AS job_cu_aplicatii
+JOIN
+    companii c ON job_cu_aplicatii.id_companie = c.id_companie
+WHERE
+    c.vechime > 5;
+
+-- Companii + email
+SELECT nume, email
+FROM companii;
+
+
+-- INTEROGĂRI DIN detalii_aplicant.php --
+
+-- Detalii despre un aplicant (informații personale + oraș + CV)
+SELECT a.nume, a.prenume, a.email, a.CNP, a.telefon, ad.oras, a.cv_link
+FROM aplicanti a
+JOIN adrese ad ON a.id_adresa = ad.id_adresa
+WHERE a.id_aplicant = ?;
+
+-- Lista de statusuri posibile pentru aplicații
+SELECT id_status, denumire
+FROM status_aplicare;
+
+-- Aplicații ale unui aplicant, filtrate după status (dacă există filtru)
+SELECT j.titlu, a.data_aplicare, sa.denumire
+FROM aplicari a
+JOIN joburi j ON a.id_job = j.id_job
+JOIN status_aplicare sa ON a.id_status = sa.id_status
+WHERE a.id_aplicant = ? AND a.id_status = ?;
+
+-- Aplicații ale unui aplicant (fără filtru de status)
+SELECT j.titlu, a.data_aplicare, sa.denumire
+FROM aplicari a
+JOIN joburi j ON a.id_job = j.id_job
+JOIN status_aplicare sa ON a.id_status = sa.id_status
+WHERE a.id_aplicant = ?;
+
+-- Competențele unui aplicant (inclusiv nivelul, studiile și certificarea)
+SELECT c.nume_competenta, nc.denumire AS nivel, c.ani_experienta,
+       ns.denumire AS studii, ca.certificare
+FROM competente_aplicanti ca
+JOIN competente c ON ca.id_competenta = c.id_competenta
+JOIN nivel_competenta nc ON c.id_nivel_competenta = nc.id_nivel_competenta
+JOIN nivel_studii ns ON c.id_nivel_studii = ns.id_nivel_studii
+WHERE ca.id_aplicant = ?;
+
+-- INTEROGĂRI DIN firme.php --
+
+-- Informații despre companie (descriere + ID)
+SELECT descriere, id_companie
+FROM companii
+WHERE nume = ?;
+
+-- Lista departamentelor în care compania angajează
+SELECT DISTINCT d.nume
+FROM joburi j
+JOIN departamente d ON j.id_departament = d.id_departament
+WHERE j.id_companie = ? AND j.status = 1;
+
+-- Lista joburilor active ale companiei
+SELECT j.titlu, d.nume AS departament, j.descriere, j.locuri_valabile
+FROM joburi j
+JOIN departamente d ON j.id_departament = d.id_departament
+WHERE j.id_companie = ? AND j.status = 1
+ORDER BY j.locuri_valabile DESC;
+
+-- Număr de aplicații primite de companie (grupate pe status: acceptați, în curs, respinși)
+SELECT 
+    SUM(CASE WHEN a.id_status = 2 THEN 1 ELSE 0 END) AS acceptati,
+    SUM(CASE WHEN a.id_status = 1 THEN 1 ELSE 0 END) AS incurs,
+    SUM(CASE WHEN a.id_status = 3 THEN 1 ELSE 0 END) AS respinsi
+FROM aplicari a
+JOIN joburi j ON a.id_job = j.id_job
+WHERE j.id_companie = ?;
+
+-- Lista statusurilor posibile (pentru filtrare)
+SELECT id_status, denumire
+FROM status_aplicare;
+
+-- Aplicanți ai companiei (cu filtru de status activ)
+SELECT ap.id_aplicant, ap.nume, ap.prenume, j.titlu, sa.denumire
+FROM aplicari a
+JOIN aplicanti ap ON a.id_aplicant = ap.id_aplicant
+JOIN joburi j ON a.id_job = j.id_job
+JOIN status_aplicare sa ON a.id_status = sa.id_status
+WHERE j.id_companie = ? AND a.id_status = ?;
+
+-- Aplicanți ai companiei (fără filtru)
+SELECT ap.id_aplicant, ap.nume, ap.prenume, j.titlu, sa.denumire
+FROM aplicari a
+JOIN aplicanti ap ON a.id_aplicant = ap.id_aplicant
+JOIN joburi j ON a.id_job = j.id_job
+JOIN status_aplicare sa ON a.id_status = sa.id_status
+WHERE j.id_companie = ?;
+
